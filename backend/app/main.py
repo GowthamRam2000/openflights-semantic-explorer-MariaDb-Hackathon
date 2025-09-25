@@ -6,8 +6,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-
-# Our connection helper (supports mariadb or pymysql based on env)
 from .db import get_conn
 
 app = FastAPI(title="OpenFlights Semantic Explorer API")
@@ -146,8 +144,6 @@ def similar_routes(
             return rows
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"/similar-routes error: {e}")
-
-# ---------- Similar Airlines ----------
 @app.get("/similar-airlines")
 def similar_airlines(
     query_vec: str = Query(..., description="Embedding as JSON-like text '[...]'"),

@@ -6,11 +6,10 @@ from dotenv import load_dotenv
 from backend.app.db import get_conn
 from etl.build_texts import airport_text, airline_text, route_text
 
-# -------------------- config & model --------------------
 load_dotenv()
-API_KEY   = os.getenv("GOOGLE_API_KEY")
-RAW_MODEL = os.getenv("GEMINI_EMBED_MODEL", "models/text-embedding-004").strip()
-DIM       = int(os.getenv("GEMINI_EMBED_DIM", "768"))
+API_KEY=os.getenv("GOOGLE_API_KEY")
+RAW_MODEL=os.getenv("GEMINI_EMBED_MODEL", "models/text-embedding-004").strip()
+DIM= int(os.getenv("GEMINI_EMBED_DIM", "768"))
 
 def normalize_model(name: str) -> str:
     name = name.strip()
@@ -22,16 +21,11 @@ def normalize_model(name: str) -> str:
     if name.startswith("models/") or name.startswith("tunedModels/"):
         return name
     return aliases.get(name, f"models/{name}")
-
 MODEL = normalize_model(RAW_MODEL)
-
 if not API_KEY:
     raise SystemExit("Set GOOGLE_API_KEY in .env before running embeddings.")
 genai.configure(api_key=API_KEY)
-
 HAS_BATCH = hasattr(genai, "batch_embed_contents")
-
-# -------------------- helpers --------------------
 def backoff(attempt: int, base: float = 0.5, cap: float = 20.0) -> float:
     return min(cap, base * (2 ** attempt) + random.uniform(0, 0.25))
 
@@ -59,7 +53,6 @@ def embed_batch(texts: List[str]) -> List[List[float]]:
                          "task_type": "RETRIEVAL_DOCUMENT",
                          "output_dimensionality": DIM} for t in texts]
                 resp = genai.batch_embed_contents(model=MODEL, requests=reqs)
-                # resp like {"embeddings": [{"values": [...]}, ...]}
                 embs = []
                 for e in resp.get("embeddings", []):
                     v = e.get("values") or e.get("embedding") or e
@@ -71,12 +64,10 @@ def embed_batch(texts: List[str]) -> List[List[float]]:
                 return embs
             except Exception as e:
                 if attempt == 7:
-                    # last resort: fall back to per-item with retries
                     return [embed_with_retry(t) for t in texts]
                 sleep_s = backoff(attempt)
                 print(f"[batch retry {attempt+1}/8] {type(e).__name__}: {e} -> sleeping {sleep_s:.2f}s")
                 time.sleep(sleep_s)
-    # fallback loop
     return [embed_with_retry(t) for t in texts]
 
 def embed_with_retry(txt: str) -> List[float]:
@@ -91,14 +82,11 @@ def embed_with_retry(txt: str) -> List[float]:
             time.sleep(sleep_s)
 
 def to_vec_text(v: List[float]) -> str:
-    # compact textual form for VEC_FromText()
     return "[" + ",".join(f"{x:.6f}" for x in v) + "]"
 
 def chunked(seq: List, size: int) -> Iterable[List]:
     for i in range(0, len(seq), size):
         yield seq[i:i+size]
-
-# -------------------- DB streaming --------------------
 def stream_airports(missing_only: bool = True,
                     tz_prefix: Optional[str] = None,
                     limit: Optional[int] = None,
@@ -165,7 +153,6 @@ def stream_routes(missing_only: bool = True,
         fetched += len(df)
         yield df
 
-# -------------------- writers (batched) --------------------
 def write_airports(limit: Optional[int], tz_prefix: Optional[str],
                    batch_size: int, page: int):
     total_written = 0
@@ -244,7 +231,6 @@ def write_routes(limit: Optional[int], batch_size: int, page: int):
                     print(f"routes: {total_written} embedded")
     print(f"routes: total embedded this run = {total_written}")
 
-# -------------------- CLI --------------------
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--only", choices=["airports","airlines","routes","all"], default="all")

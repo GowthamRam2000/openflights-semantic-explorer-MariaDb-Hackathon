@@ -3,26 +3,19 @@ import os
 import json
 import time
 from typing import List, Optional, Dict, Any
-
 import requests
 import streamlit as st
 from dotenv import load_dotenv
-
-# ========== Setup & Config ==========
 load_dotenv()
-
 st.set_page_config(
     page_title="OpenFlights Semantic Explorer ✈",
     page_icon="✈",
     layout="wide",
 )
-
 API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000").rstrip("/")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
 RAW_MODEL = os.getenv("GEMINI_EMBED_MODEL", "models/embedding-001").strip()
 EMB_DIM = int(os.getenv("GEMINI_EMBED_DIM", "768"))
-
-# Some users set legacy names like "gemini-embedding-001"
 def normalize_model(name: str) -> str:
     name = (name or "").strip()
     aliases = {
@@ -35,8 +28,6 @@ def normalize_model(name: str) -> str:
     return aliases.get(name, f"models/{name}")
 
 MODEL = normalize_model(RAW_MODEL)
-
-# Lazy import to avoid pyarrow/libiconv issues in some envs
 @st.cache_resource(show_spinner=False)
 def _genai():
     try:
@@ -57,9 +48,7 @@ def vec_to_text(v: List[float]) -> str:
 def embed_cached(text: str, task_type: str, model: str, dim: int) -> List[float]:
     """Caches embeddings for identical inputs within the session."""
     genai = _genai()
-    # Validate task type
     tt = task_type if task_type in {"RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY"} else "RETRIEVAL_QUERY"
-    # Retry a couple times for transient 5xx/timeout
     last_err = None
     for attempt in range(4):
         try:
@@ -81,12 +70,9 @@ def embed_cached(text: str, task_type: str, model: str, dim: int) -> List[float]
 def embed(text: str, task_type: str = "RETRIEVAL_QUERY") -> List[float]:
     return embed_cached(text.strip(), task_type, MODEL, EMB_DIM)
 
-# ========== Header ==========
 st.markdown("### OpenFlights Semantic Explorer ✈")
 st.caption(f"Embedding model: **{MODEL}** (from `{RAW_MODEL}`) · dim: **{EMB_DIM}**")
 st.divider()
-
-# ========== Healthcheck ==========
 health_col1, health_col2 = st.columns([1, 8])
 with health_col1:
     if st.button("Check API health", use_container_width=True):
@@ -102,11 +88,7 @@ with health_col1:
 
 with health_col2:
     st.info("Tip: If results look empty, try removing filters (e.g., Timezone) to widen search.", icon="💡")
-
-# ========== Tabs ==========
 tab_air, tab_routes, tab_airlines = st.tabs(["Airports", "Routes", "Airlines"])
-
-# ===== Airports Tab =====
 with tab_air:
     st.subheader("Similar Airports")
     c1, c2 = st.columns([3, 2])
@@ -145,7 +127,6 @@ with tab_air:
             params = {"query_vec": vec_to_text(qvec)}
             if tz_prefix:
                 params["tz_prefix"] = tz_prefix
-            # Let backend decide default K; pass if supported
             params["k"] = str(k)
 
             with st.spinner("Searching…"):
@@ -166,7 +147,6 @@ with tab_air:
             "- “Popular island leisure airport in Europe”"
         )
 
-# ===== Routes Tab =====
 with tab_routes:
     st.subheader("Similar Routes (hybrid: vector + SQL filters)")
     rq = st.text_input(
@@ -198,7 +178,6 @@ with tab_routes:
                 "stops_max": int(max_stops),
                 "k": int(k_rt),
             }
-            # strip None
             params = {k: v for k, v in params.items() if v is not None}
             with st.spinner("Searching routes…"):
                 r = requests.get(f"{API_BASE}/similar-routes", params=params, timeout=90)
@@ -218,7 +197,6 @@ with tab_routes:
             "- “SYD to Europe leisure-heavy routes”"
         )
 
-# ===== Airlines Tab =====
 with tab_airlines:
     st.subheader("Similar Airlines")
     alq = st.text_input(
@@ -261,7 +239,6 @@ with tab_airlines:
             "- “Regional Indian carrier with turboprops”"
         )
 
-# ========== Footer ==========
 st.divider()
 st.caption(
     "Tip: Timezone accepts prefixes like **Asia/** or exact zones like **Asia/Kolkata**. "
