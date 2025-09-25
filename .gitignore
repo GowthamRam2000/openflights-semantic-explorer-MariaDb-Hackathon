@@ -1,0 +1,78 @@
+# --- OS junk ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# --- Python bytecode / cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+.conda/
+.mamba/
+
+# --- Build / packaging ---
+build/
+dist/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# --- Testing / coverage / tooling caches ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.pytype/
+.pyre/
+.ruff_cache/
+.cache/
+
+# --- Logs & temp ---
+*.log
+logs/
+tmp/
+temp/
+
+# --- IDE / Editor ---
+.idea/
+.vscode/
+*.iml
+
+# --- Streamlit ---
+.streamlit/secrets.toml
+!.streamlit/config.toml  # keep your local config if you commit it intentionally
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Data (local clones & generated artifacts) ---
+data/openflights/        # cloned OpenFlights repo (don’t vendor it)
+# Add more generated data dirs here if needed:
+# data/generated/
+# etl/output/
+
+# --- Docker ---
+docker-compose.override.yml
+dbdata/
+**/dbdata/
+
+# --- Misc backups / swap ---
+*.bak
+*.swp
+*.swo

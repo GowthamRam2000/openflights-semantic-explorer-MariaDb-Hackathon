@@ -1,0 +1,22 @@
+version: "3.9"
+services:
+  mariadb:
+    image: mariadb:11.8   # 11.8 LTS includes native VECTOR type & functions
+    container_name: ofx_mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpw123
+      MARIADB_DATABASE: openflights
+      MARIADB_USER: ofx
+      MARIADB_PASSWORD: ofxpw
+    ports:
+      - "3306:3306"
+    command:
+      - --max_allowed_packet=256M
+      - --local_infile=1
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./data:/data
+      - ./sql:/docker-entrypoint-initdb.d
+volumes:
+  dbdata:
