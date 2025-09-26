@@ -73,12 +73,13 @@ DB_NAME=openflights
 GOOGLE_API_KEY=your_google_api_key_here
 GEMINI_EMBED_MODEL=models/text-embedding-004
 GEMINI_EMBED_DIM=768
+GEMINI_MULTI_EMBED_MODEL=models/text-embedding-004  # optional multilingual fallback
 
 # Frontend → Backend base URL
 API_BASE=http://127.0.0.1:8000
 ```
 
-The backend and ETL load `.env` automatically via `python-dotenv`. Streamlit also loads the same file at startup.
+The backend, ETL, and Streamlit load `.env` automatically via `python-dotenv`. Set `GEMINI_MULTI_EMBED_MODEL` if you want server-side embedding to choose a multilingual-capable model automatically when non-Latin input is detected.
 
 ---
 
@@ -130,7 +131,7 @@ If you prefer a self-managed MariaDB instance, ensure it runs 11.4+ with the Vec
    python -m etl.load_openflights
    ```
 
-   This upserts airports and airlines, then inserts routes (auto-increment primary key). On a fresh database the command finishes in under a minute.
+   This upserts airports and airlines, then idempotently merges routes using a generated `route_key` so rerunning the loader will not create duplicates. On a fresh database the command finishes in under a minute.
 
 The loader also writes descriptive CSV dumps into `tmp/` to help inspect the generated text.
 
@@ -153,7 +154,33 @@ Key details:
 - Respects `ON DUPLICATE KEY UPDATE` to keep embeddings in sync
 - Supports filters: `--tz Asia/` to embed only a subset of airports, `--limit` to throttle row counts during testing
 
-The script prints progress counters every few hundred rows. Rerun as needed; missing embeddings are detected via left joins.
+The script prints progress counters every few hundred rows and reuses the precomputed descriptive strings while batching. Rerun as needed; missing embeddings are detected via left joins.
+
+---
+
+## Run Everything with Docker Compose
+
+We now ship Dockerfiles for the backend (FastAPI + Uvicorn) and frontend (Streamlit). Bring up the full stack with:
+
+```bash
+docker compose up --build
+```
+
+Ensure your `.env` (or shell environment) includes the Gemini settings—at minimum `GOOGLE_API_KEY`, `GEMINI_EMBED_MODEL`, and optionally `GEMINI_MULTI_EMBED_MODEL`—so the backend can embed user prompts.
+
+After the containers are running:
+
+- Bootstrap the data:
+
+  ```bash
+  docker compose run --rm backend python -m etl.load_openflights
+  docker compose run --rm backend python -m etl.embeddings --only all
+  ```
+
+- FastAPI docs are served from `http://127.0.0.1:8000/docs`
+- Streamlit UI lives at `http://127.0.0.1:8501`
+
+When Streamlit lacks a local Gemini key it will automatically send `query_text` to the backend, which embeds the prompt as long as the backend has `GOOGLE_API_KEY` configured.
 
 ---
 
@@ -171,7 +198,7 @@ The API exposes:
 - Health probe: `GET /health`
 - Vector endpoints described in [API Reference](#api-reference)
 
-Environment variables control connection details (see `.env`). The backend defaults to MariaDB Connector/Python and opens short-lived connections for each request.
+Environment variables control connection details (see `.env`). The backend defaults to MariaDB Connector/Python and opens short-lived connections for each request. Each similarity endpoint now accepts either a raw `query_vec` (JSON array string) **or** a `query_text`, which the API embeds server-side with optional multilingual fallback.
 
 ---
 
@@ -189,7 +216,7 @@ Use the tabs to:
 - Search **Routes** with semantic prompts plus hard SQL filters (source, destination, max stops, avoid airline)
 - Search **Airlines** with optional country restriction
 
-Queries are embedded locally with the same Gemini model before being sent to the backend.
+Queries are embedded locally with the same Gemini model before being sent to the backend. If Streamlit does not have a local Gemini key it falls back to sending `query_text` so the backend can embed on its behalf.
 
 ---
 
@@ -199,17 +226,17 @@ All endpoints accept query parameters and return JSON arrays of ranked entities.
 
 - `GET /health` → `{ "ok": true }` if the DB connection and `SELECT 1` succeed.
 - `GET /similar-airports`
-  - `query_vec` (required): textual vector `"[0.1,0.2,...]"`
+  - `query_vec` or `query_text` (one required)
   - `tz_prefix`: optional IANA prefix or exact match; converted to `LIKE 'prefix%'`
   - `k`: result count (1-200)
 - `GET /similar-routes`
-  - `query_vec` (required)
+  - `query_vec` or `query_text` (one required)
   - `src`, `dst`: optional IATA codes (uppercased server-side)
   - `stops_max`: integer 0-3 filter
   - `avoid_airline`: optional airline code
   - `k`: result count
 - `GET /similar-airlines`
-  - `query_vec` (required)
+  - `query_vec` or `query_text` (one required)
   - `country`: optional exact country string
   - `k`: result count
 
@@ -245,8 +272,9 @@ All commands completed successfully; the Streamlit UI returned ranked results fo
 
 - **500 errors from similarity endpoints**: Ensure `VEC_DISTANCE_COSINE` exists. You must run MariaDB 11.4+ with the vector plugin; the provided Docker image already includes it.
 - **Embedding script exits immediately**: Confirm `GOOGLE_API_KEY` is present and has access to the selected model (`models/text-embedding-004`).
+- **503 errors when calling `query_text` endpoints**: The backend needs `GOOGLE_API_KEY`. Either supply one (preferred) or call the API with a precomputed `query_vec`.
 - **`mariadb` Python package build failures (macOS)**: Install the Connector/C library via Homebrew before running `pip install -r requirements.txt`.
-- **Duplicate route rows after rerunning the loader**: The provided loader assumes a clean `routes` table. Truncate or add an ON DUPLICATE KEY constraint before repeated imports.
+- **Duplicate route rows after rerunning the loader**: The loader now generates a `route_key` and upserts rows. If you have legacy duplicates, run `python -m etl.load_openflights` once after updating to clean them up.
 - **Connection exhaustion during long ETL runs**: If you see `Too many connections`, lower the `--batch` size, close other DB clients, or raise MariaDB’s `max_connections`.
 
 Happy exploring! 

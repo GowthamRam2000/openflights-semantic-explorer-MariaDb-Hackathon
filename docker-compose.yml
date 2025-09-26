@@ -18,5 +18,61 @@ services:
       - dbdata:/var/lib/mysql
       - ./data:/data
       - ./sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uofx", "-pofxpw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-ofx}
+      DB_PASSWORD: ${DB_PASSWORD:-ofxpw}
+      DB_NAME: ${DB_NAME:-openflights}
+      DB_DRIVER: ${DB_DRIVER:-mariadb}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_EMBED_MODEL: ${GEMINI_EMBED_MODEL:-models/text-embedding-004}
+      GEMINI_MULTI_EMBED_MODEL: ${GEMINI_MULTI_EMBED_MODEL:-models/text-embedding-004}
+      GEMINI_EMBED_DIM: ${GEMINI_EMBED_DIM:-768}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./etl:/app/etl:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c 'import urllib.request,sys;\nimport json;\nreq=urllib.request.Request(\"http://127.0.0.1:8000/health\");\nresp=urllib.request.urlopen(req, timeout=5);\nbody=json.loads(resp.read().decode());\nsys.exit(0 if body.get(\"ok\") else 1)'",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      API_BASE: http://backend:8000
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_EMBED_MODEL: ${GEMINI_EMBED_MODEL:-models/text-embedding-004}
+      GEMINI_EMBED_DIM: ${GEMINI_EMBED_DIM:-768}
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./frontend:/app/frontend:ro
+
 volumes:
   dbdata:

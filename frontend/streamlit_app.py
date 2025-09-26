@@ -1,8 +1,7 @@
 # frontend/streamlit_app.py
 import os
-import json
 import time
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -70,6 +69,58 @@ def embed_cached(text: str, task_type: str, model: str, dim: int) -> List[float]
 def embed(text: str, task_type: str = "RETRIEVAL_QUERY") -> List[float]:
     return embed_cached(text.strip(), task_type, MODEL, EMB_DIM)
 
+
+def _needs_multilingual(text: str) -> bool:
+    return any(ord(ch) > 127 for ch in text)
+
+
+def _filter_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in params.items() if v is not None and v != ""}
+
+
+def _run_vector_search(
+    endpoint: str,
+    prompt: str,
+    base_params: Dict[str, Any],
+    task_type: str = "RETRIEVAL_QUERY",
+    timeout: int = 90,
+) -> Tuple[List[Dict[str, Any]], bool]:
+    """Send request to backend, using local embeddings when possible."""
+
+    params = dict(base_params)
+    used_server_embedding = False
+
+    prompt = prompt.strip()
+    if not prompt:
+        raise ValueError("Prompt must be non-empty")
+
+    if GOOGLE_API_KEY:
+        try:
+            vec = embed(prompt, task_type=task_type)
+            params["query_vec"] = vec_to_text(vec)
+        except Exception as exc:  # pragma: no cover - interactive feedback
+            st.info(
+                f"Local embedding failed ({exc}); falling back to API-side embeddings.",
+                icon="ℹ️",
+            )
+            params.pop("query_vec", None)
+            used_server_embedding = True
+    else:
+        used_server_embedding = True
+
+    if used_server_embedding:
+        params["query_text"] = prompt
+        if _needs_multilingual(prompt):
+            params["use_multilingual"] = "true"
+
+    params = _filter_params(params)
+    with st.spinner("Searching…"):
+        resp = requests.get(
+            f"{API_BASE}/{endpoint}", params=params, timeout=timeout
+        )
+        resp.raise_for_status()
+    return resp.json(), used_server_embedding
+
 st.markdown("### OpenFlights Semantic Explorer ✈")
 st.caption(f"Embedding model: **{MODEL}** (from `{RAW_MODEL}`) · dim: **{EMB_DIM}**")
 st.divider()
@@ -116,7 +167,6 @@ with tab_air:
         if not aq.strip():
             st.warning("Please enter a short description."); st.stop()
         try:
-            qvec = embed(aq, task_type="RETRIEVAL_QUERY")
             tz_prefix = None
             if exact_tz.strip():
                 # If exact is provided, pass that. Backend treats it as prefix; exact still works.
@@ -124,19 +174,19 @@ with tab_air:
             elif tz_continent != "(any)":
                 tz_prefix = tz_continent
 
-            params = {"query_vec": vec_to_text(qvec)}
-            if tz_prefix:
-                params["tz_prefix"] = tz_prefix
-            params["k"] = str(k)
-
-            with st.spinner("Searching…"):
-                r = requests.get(f"{API_BASE}/similar-airports", params=params, timeout=60)
-                r.raise_for_status()
-                data = r.json()
+            params = {"tz_prefix": tz_prefix, "k": k}
+            data, used_server_embedding = _run_vector_search(
+                "similar-airports",
+                aq,
+                params,
+                timeout=60,
+            )
             if not data:
                 st.warning("No matches. Try removing Timezone filter or broadening the description.")
             else:
                 st.dataframe(data, use_container_width=True, height=480)
+            if used_server_embedding and not GOOGLE_API_KEY:
+                st.caption("Embedding handled server-side (no local GOOGLE_API_KEY).")
         except Exception as e:
             st.error(f"Airport search failed: {e}")
 
@@ -169,24 +219,25 @@ with tab_routes:
         if not rq.strip():
             st.warning("Please enter a short route description."); st.stop()
         try:
-            qvec = embed(rq, task_type="RETRIEVAL_QUERY")
             params = {
-                "query_vec": vec_to_text(qvec),
                 "src": src,
                 "dst": dst,
                 "avoid_airline": avoid,
                 "stops_max": int(max_stops),
                 "k": int(k_rt),
             }
-            params = {k: v for k, v in params.items() if v is not None}
-            with st.spinner("Searching routes…"):
-                r = requests.get(f"{API_BASE}/similar-routes", params=params, timeout=90)
-                r.raise_for_status()
-                data = r.json()
+            data, used_server_embedding = _run_vector_search(
+                "similar-routes",
+                rq,
+                params,
+                timeout=90,
+            )
             if not data:
                 st.warning("No route matches. Try removing filters or widening the description.")
             else:
                 st.dataframe(data, use_container_width=True, height=480)
+            if used_server_embedding and not GOOGLE_API_KEY:
+                st.caption("Embedding handled server-side (no local GOOGLE_API_KEY).")
         except Exception as e:
             st.error(f"Route search failed: {e}")
 
@@ -214,21 +265,22 @@ with tab_airlines:
         if not alq.strip():
             st.warning("Please enter a short airline description."); st.stop()
         try:
-            qvec = embed(alq, task_type="RETRIEVAL_QUERY")
             params = {
-                "query_vec": vec_to_text(qvec),
                 "country": country.strip() or None,
                 "k": int(k_al),
             }
-            params = {k: v for k, v in params.items() if v is not None}
-            with st.spinner("Searching airlines…"):
-                r = requests.get(f"{API_BASE}/similar-airlines", params=params, timeout=60)
-                r.raise_for_status()
-                data = r.json()
+            data, used_server_embedding = _run_vector_search(
+                "similar-airlines",
+                alq,
+                params,
+                timeout=60,
+            )
             if not data:
                 st.warning("No airline matches. Try clearing the country filter or adjusting your description.")
             else:
                 st.dataframe(data, use_container_width=True, height=480)
+            if used_server_embedding and not GOOGLE_API_KEY:
+                st.caption("Embedding handled server-side (no local GOOGLE_API_KEY).")
         except Exception as e:
             st.error(f"Airline search failed: {e}")
 

@@ -157,8 +157,9 @@ def write_airports(limit: Optional[int], tz_prefix: Optional[str],
                    batch_size: int, page: int):
     total_written = 0
     for df in stream_airports(missing_only=True, tz_prefix=tz_prefix, limit=limit, page=page):
-        # build descriptions
-        descs = [airport_text(df.iloc[i]) for i in range(len(df))]
+        df = df.copy()
+        df["desc_text"] = df.apply(airport_text, axis=1)
+        descs = df["desc_text"].tolist()
         # embed in batches
         with get_conn() as conn:
             cur = conn.cursor()
@@ -169,7 +170,7 @@ def write_airports(limit: Optional[int], tz_prefix: Optional[str],
                 base = done
                 for j, emb in enumerate(embs):
                     row = df.iloc[base + j]
-                    rows.append((int(row["airport_id"]), airport_text(row), to_vec_text(emb)))
+                    rows.append((int(row["airport_id"]), row["desc_text"], to_vec_text(emb)))
                 cur.executemany(
                     "INSERT INTO airports_emb (airport_id, desc_text, emb) VALUES (%s,%s,VEC_FromText(%s)) "
                     "ON DUPLICATE KEY UPDATE desc_text=VALUES(desc_text), emb=VALUES(emb)",
@@ -184,7 +185,9 @@ def write_airports(limit: Optional[int], tz_prefix: Optional[str],
 def write_airlines(limit: Optional[int], batch_size: int, page: int):
     total_written = 0
     for df in stream_airlines(missing_only=True, limit=limit, page=page):
-        descs = [airline_text(df.iloc[i]) for i in range(len(df))]
+        df = df.copy()
+        df["desc_text"] = df.apply(airline_text, axis=1)
+        descs = df["desc_text"].tolist()
         with get_conn() as conn:
             cur = conn.cursor()
             done = 0
@@ -194,7 +197,7 @@ def write_airlines(limit: Optional[int], batch_size: int, page: int):
                 base = done
                 for j, emb in enumerate(embs):
                     row = df.iloc[base + j]
-                    rows.append((int(row["airline_id"]), airline_text(row), to_vec_text(emb)))
+                    rows.append((int(row["airline_id"]), row["desc_text"], to_vec_text(emb)))
                 cur.executemany(
                     "INSERT INTO airlines_emb (airline_id, desc_text, emb) VALUES (%s,%s,VEC_FromText(%s)) "
                     "ON DUPLICATE KEY UPDATE desc_text=VALUES(desc_text), emb=VALUES(emb)",
@@ -209,7 +212,9 @@ def write_airlines(limit: Optional[int], batch_size: int, page: int):
 def write_routes(limit: Optional[int], batch_size: int, page: int):
     total_written = 0
     for df in stream_routes(missing_only=True, limit=limit, page=page):
-        descs = [route_text(df.iloc[i]) for i in range(len(df))]
+        df = df.copy()
+        df["desc_text"] = df.apply(route_text, axis=1)
+        descs = df["desc_text"].tolist()
         with get_conn() as conn:
             cur = conn.cursor()
             done = 0
@@ -219,7 +224,7 @@ def write_routes(limit: Optional[int], batch_size: int, page: int):
                 base = done
                 for j, emb in enumerate(embs):
                     row = df.iloc[base + j]
-                    rows.append((int(row["id"]), route_text(row), to_vec_text(emb)))
+                    rows.append((int(row["id"]), row["desc_text"], to_vec_text(emb)))
                 cur.executemany(
                     "INSERT INTO routes_emb (route_id, desc_text, emb) VALUES (%s,%s,VEC_FromText(%s)) "
                     "ON DUPLICATE KEY UPDATE desc_text=VALUES(desc_text), emb=VALUES(emb)",

@@ -36,5 +36,18 @@ CREATE TABLE IF NOT EXISTS routes (
   dst_id        INT,
   codeshare     VARCHAR(5),
   stops         INT,
-  equipment     VARCHAR(64)
+  equipment     VARCHAR(64),
+  route_key     VARCHAR(191)
+                 GENERATED ALWAYS AS (
+                   CONCAT_WS(
+                     '|',
+                     UPPER(COALESCE(airline, '')),
+                     UPPER(COALESCE(src, '')),
+                     UPPER(COALESCE(dst, '')),
+                     COALESCE(codeshare, ''),
+                     COALESCE(CAST(stops AS CHAR), ''),
+                     COALESCE(equipment, '')
+                   )
+                 ) STORED,
+  UNIQUE KEY uniq_route_key (route_key)
 ) ENGINE=InnoDB;
