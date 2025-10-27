@@ -82,7 +82,6 @@ def ensure_routes_unique_key():
         has_column = cur.fetchone()[0] > 0
         if has_column:
             return
-
         print("Preparing routes table for idempotent loads (dedup + route_key)...")
         cur.execute(
             """
