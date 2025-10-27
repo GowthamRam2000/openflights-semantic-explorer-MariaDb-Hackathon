@@ -46,7 +46,6 @@ def embed_batch(texts: List[str]) -> List[List[float]]:
     if not texts:
         return []
     if HAS_BATCH:
-        # robust retry for whole batch
         for attempt in range(8):
             try:
                 reqs = [{"content": t,
@@ -244,8 +243,6 @@ if __name__ == "__main__":
     p.add_argument("--batch", type=int, default=128, help="Embedding batch size (50-256 good)")
     p.add_argument("--page", type=int, default=4000, help="DB fetch page size")
     args = p.parse_args()
-
-    # clamp batch to reasonable bounds
     batch = max(16, min(args.batch, 512))
     page  = max(batch, args.page)
 
