@@ -49,7 +49,6 @@ def upsert_df(df: pd.DataFrame, table: str, cols: list[str], pk: str | None):
         print(f"Upserted {cur.rowcount} rows into {table}")
 
 def ensure_routes_unique_key():
-    """Ensure the routes table has the generated route_key and no duplicates."""
     db_name = os.getenv("DB_NAME", "openflights")
     alter_sql = """
       ALTER TABLE routes
@@ -104,7 +103,6 @@ def ensure_routes_unique_key():
         print("route_key column and uniqueness constraint added to routes table")
 
 def build_route_dedup_key(df: pd.DataFrame) -> pd.Series:
-    """Create a stable key mirroring the generated route_key expression."""
     stops_as_text = df["stops"].apply(lambda x: "" if pd.isna(x) else str(int(x)))
     return (
         df["airline"].fillna("").str.upper()
@@ -124,12 +122,8 @@ def main():
     airports = load_table("airports")
     airlines = load_table("airlines")
     routes = load_table("routes")
-
-    # relational
     upsert_df(airports, "airports", airports.columns.tolist(), "airport_id")
     upsert_df(airlines, "airlines", airlines.columns.tolist(), "airline_id")
-
-    # routes -> idempotent upsert preserving auto ids
     ensure_routes_unique_key()
 
     dedup_keys = build_route_dedup_key(routes)
@@ -155,11 +149,9 @@ def main():
         )
         print(f"Upserted {cur.rowcount} route rows")
 
-    # optional debug dumps
     os.makedirs("tmp", exist_ok=True)
     airports.assign(desc_text=airports.apply(airport_text, axis=1))[["airport_id","desc_text"]].to_csv("tmp/airports_desc.csv", index=False)
     airlines.assign(desc_text=airlines.apply(airline_text, axis=1))[["airline_id","desc_text"]].to_csv("tmp/airlines_desc.csv", index=False)
-    # routes desc built during embeddings
 
 if __name__ == "__main__":
     main()
