@@ -45,7 +45,6 @@ def vec_to_text(v: List[float]) -> str:
 
 @st.cache_data(show_spinner=False)
 def embed_cached(text: str, task_type: str, model: str, dim: int) -> List[float]:
-    """Caches embeddings for identical inputs within the session."""
     genai = _genai()
     tt = task_type if task_type in {"RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY"} else "RETRIEVAL_QUERY"
     last_err = None
@@ -85,7 +84,6 @@ def _run_vector_search(
     task_type: str = "RETRIEVAL_QUERY",
     timeout: int = 90,
 ) -> Tuple[List[Dict[str, Any]], bool]:
-    """Send request to backend, using local embeddings when possible."""
 
     params = dict(base_params)
     used_server_embedding = False
@@ -98,7 +96,7 @@ def _run_vector_search(
         try:
             vec = embed(prompt, task_type=task_type)
             params["query_vec"] = vec_to_text(vec)
-        except Exception as exc:  # pragma: no cover - interactive feedback
+        except Exception as exc:  
             st.info(
                 f"Local embedding failed ({exc}); falling back to API-side embeddings.",
                 icon="ℹ️",
@@ -131,7 +129,7 @@ with health_col1:
             r = requests.get(f"{API_BASE}/health", timeout=10)
             ok = r.ok and r.json().get("ok")
             if ok:
-                st.success("API healthy ✅")
+                st.success("API healthy ")
             else:
                 st.warning(f"API responded but not healthy: {r.text[:200]}")
         except Exception as e:
@@ -156,7 +154,7 @@ with tab_air:
         tz_continent = st.selectbox(
             "Timezone prefix (IANA)",
             ["(any)", "Africa/", "America/", "Antarctica/", "Asia/", "Atlantic/", "Australia/", "Europe/", "Indian/", "Pacific/"],
-            index=3,  # default to Asia/
+            index=3,  
         )
         exact_tz = st.text_input("Exact timezone (optional, e.g., Asia/Kolkata)", value="", key="exact_tz")
 
@@ -169,7 +167,6 @@ with tab_air:
         try:
             tz_prefix = None
             if exact_tz.strip():
-                # If exact is provided, pass that. Backend treats it as prefix; exact still works.
                 tz_prefix = exact_tz.strip()
             elif tz_continent != "(any)":
                 tz_prefix = tz_continent
