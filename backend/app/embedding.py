@@ -34,7 +34,7 @@ _MULTI_MODEL = _normalize_model(_RAW_MULTI_MODEL)
 def _genai():
     if not _API_KEY:
         raise RuntimeError("GOOGLE_API_KEY is not configured; provide query_vec instead of query_text")
-    import google.generativeai as genai  # heavy import guarded
+    import google.generativeai as genai  
 
     genai.configure(api_key=_API_KEY)
     return genai
@@ -84,7 +84,7 @@ def embed_text(
                     f"Model {model} returned {len(vector)} dims; expected {_EMBED_DIM}"
                 )
             return vector
-        except Exception as exc:  # pragma: no cover - thin wrapper
+        except Exception as exc:  
             last_exc = exc
             if attempt == 3:
                 break
@@ -101,7 +101,7 @@ def sanitize_vector_string(vec_text: str) -> str:
 
     try:
         data = json.loads(vec_text)
-    except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+    except json.JSONDecodeError as exc:  
         raise ValueError("Vector must be JSON array text, e.g. '[0.1, 0.2]'") from exc
 
     if not isinstance(data, list) or not data:
