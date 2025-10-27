@@ -1,6 +1,4 @@
-# backend/app/main.py
 from __future__ import annotations
-
 import os
 from typing import Any, Dict, List, Optional
 
@@ -129,10 +127,7 @@ def similar_airports(
     ),
     k: int = Query(25, ge=1, le=200),
 ):
-    """
-    Vector similarity over airports with optional timezone narrowing.
-    Uses the vector index first, then applies an optional tz filter.
-    """
+
     k = _as_int(k, 25, 1, 200)
     vector_text = _resolve_query_vector(
         query_vec=query_vec,
@@ -171,8 +166,6 @@ def similar_airports(
             return [AirportResult(**row) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"/similar-airports error: {e}")
-
-# ---------- Similar Routes (Hybrid: vector + filters) ----------
 @app.get("/similar-routes", response_model=List[RouteResult])
 def similar_routes(
     query_vec: Optional[str] = Query(
@@ -207,7 +200,7 @@ def similar_routes(
         use_multilingual=use_multilingual,
         task_type="RETRIEVAL_QUERY",
     )
-    topN = 2000  # candidate pool size before filtering
+    topN = 2000  
 
     sub_sql = f"""
       SELECT r.id, r.airline, r.src, r.dst, r.stops,
@@ -219,7 +212,7 @@ def similar_routes(
     """
 
     where = []
-    params: List[Any] = [vector_text]  # for the subquery vec
+    params: List[Any] = [vector_text]  
 
     if src:
         where.append("t.src = %s")
@@ -295,8 +288,6 @@ def similar_airlines(
             return [AirlineResult(**row) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"/similar-airlines error: {e}")
-
-# ---------- Optional: root ----------
 @app.get("/")
 def root():
     return {
